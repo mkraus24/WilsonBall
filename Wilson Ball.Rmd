@@ -1,0 +1,247 @@
+---
+title: "Wilson Ball"
+author: "Matthew Kraus"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r Setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+### Libraries
+
+```{r Libraries}
+library(tidyverse)
+library(data.table)
+library(gt)
+library(gtExtras)
+library(ggimage)
+
+Sys.setenv(CHROMOTE_CHROME = "C:/Users/15622/AppData/Local/Google/Chrome/Application/chrome.exe")
+```
+
+### Data
+
+```{r Data Import}
+wilson <- data.table(read_csv("Wilson Ball/WilsonCleaned_3.4.24.csv", show_col_types = F))
+raw_wilson <- data.table(read_csv("Wilson Ball/Wilson_3.4.24.csv", show_col_types = F))
+dictionary <- data.table(read_csv("Wilson Ball/WilsonDictionary.csv", show_col_types = F))
+```
+
+### Clean Data
+
+```{r Clean Data}
+wilson[, QB := factor(ifelse(QB == "Lichtenberg", "Brady Lichtenberg",
+                      ifelse(QB == "Hoying", "Jacob Hoying",
+                             ifelse(QB == "Kocher", "Will Kocher",
+                                    ifelse(QB == "Drogosh", "Brady Drogosh",
+                                           ifelse(QB == "Sorsby", "Brendan Sorsby", "Samaj Jones"))))), levels = c("Brady Drogosh",
+                                                                                                                   "Jacob Hoying",
+                                                                                                                   "Samaj Jones",
+                                                                                                                   "Will Kocher",
+                                                                                                                   "Brady Lichtenberg",
+                                                                                                                   "Brendan Sorsby"))]
+
+wilson[, headshot := ifelse(QB == "Brady Lichtenberg", "https://shorturl.at/hsEX8",
+                            ifelse(QB == "Jacob Hoying", "https://shorturl.at/lIVZ3",
+                                  ifelse(QB == "Will Kocher", "https://shorturl.at/gsuX8",
+                                          ifelse(QB == "Brady Drogosh", "https://shorturl.at/nuHQ3",
+                                           ifelse(QB == "Brendan Sorsby", "https://rb.gy/udhymb", "https://shorturl.at/biu45")))))]
+
+wilson[, DIST_bins := factor(ifelse(DIST >= 7 & DIST <= 15, "7-15",
+                             ifelse(DIST >= 16 & DIST <= 24, "16-24",
+                                    ifelse(DIST >= 25 & DIST <= 33, "25-33",
+                                           ifelse(DIST >= 34 & DIST <= 42, "34-42", "43-50")))), levels = c("7-15", "16-24", "25-33", "34-42", "43-50"))]
+
+wilson[, SE_bins := factor(ifelse(SE <= 60, "0-60",
+                             ifelse(SE > 60 & SE <= 70, "61-70",
+                                    ifelse(SE > 70 & SE <= 80, "71-80",
+                                           ifelse(SE > 80 & SE <= 90, "81-90", "91-100")))), levels = c("0-60", "61-70", "71-80", "81-90", "91-100"))]
+```
+
+### Main Table
+
+```{r Full Table}
+# fulltable <- 
+wilson %>% 
+  group_by(QB, DIST_bins) %>% 
+  summarise(TotalThrows = n(),
+            AvgVelo = mean(VEL),
+            AvgSE = mean(SE),
+            AvgSpin = mean(SPIN),
+            AvgRLT = mean(RLT)) %>%
+  mutate(AvgVelo = round(AvgVelo, 2),
+         AvgSE = round(AvgSE, 2),
+         AvgSpin = round(AvgSpin, 2),
+         AvgRLT = round(AvgRLT, 2)) %>%
+  as.data.table() %>% 
+  gt(groupname_col = "QB") %>%
+  gt_theme_538() %>%
+  tab_header(title = "Wilson QBX Analysis, by QB and Throw Distance",
+             subtitle = "data from Spring Ball #1 (3/4/24)") %>%
+  tab_style(
+        style = cell_borders(sides = "right", color = "white", weight = px(2), style = "solid"),
+        locations = cells_body(
+          columns = c("AvgVelo", "AvgSE", "AvgSpin", "AvgRLT"))
+      ) %>%
+  cols_label(QB = "",
+             DIST_bins = "Air Yards",
+             TotalThrows = "# of Throws",
+             AvgVelo = "Ball Speed (MPH)",
+             AvgSE = "Spiral Efficiency (%)",
+             AvgSpin = "Spin Rate (RPM)",
+             AvgRLT = "Release Time (sec)"
+             ) %>%
+  tab_style(locations = cells_body(columns = c("AvgVelo", "AvgSE", "AvgSpin", "AvgRLT")),
+            style = cell_text(color = "white")
+            ) %>% 
+  data_color(columns = AvgVelo,
+             autocolor_text = F,
+             fn = scales::col_numeric(
+               palette = c("yellow", "#008E00"),
+               domain = c(20, 51)
+               )
+             ) %>%
+  data_color(columns = AvgSE,
+             autocolor_text = F,
+             fn = scales::col_numeric(
+               palette = c("yellow", "#008E00"),
+               domain = c(45, 100)
+               )
+             ) %>%
+  data_color(columns = AvgSpin,
+             autocolor_text = F,
+             fn = scales::col_numeric(
+               palette = c("yellow", "#008E00"),
+               domain = c(400, 790)
+               )
+             ) %>%
+  data_color(columns = AvgRLT,
+             autocolor_text = F,
+             fn = scales::col_numeric(
+               palette = c("#008E00", "yellow"),
+               domain = c(0.35, 0.75)
+               )
+             ) %>%
+  cols_align(columns = everything(), align = "right") %>%
+  cols_width(DIST_bins ~ px(185)) %>%
+  opt_align_table_header(align = "center")
+
+# gtsave(fulltable, filename = "fulltable.html")
+```
+
+```{r Averages Table}
+# avgs_table <- 
+wilson %>% 
+  group_by(DIST_bins) %>% 
+  summarise(AvgVelo = mean(VEL),
+            AvgSE = mean(SE),
+            AvgSpin = mean(SPIN),
+            AvgRLT = mean(RLT)) %>%
+  mutate(AvgVelo = round(AvgVelo, 2),
+         AvgSE = round(AvgSE, 2),
+         AvgSpin = round(AvgSpin, 2),
+         AvgRLT = round(AvgRLT, 2)) %>% 
+  as.data.table() %>% 
+  gt() %>% 
+  gt_theme_538() %>% 
+  tab_header(title = "Wilson QBX Averages Among UC QBs",
+             subtitle = "data from Spring Ball #1 (3/4/24)") %>%
+  tab_style(
+        style = cell_borders(sides = "right", color = "grey", weight = px(2), style = "solid"),
+        locations = cells_body(
+          columns = DIST_bins)
+      ) %>%
+  cols_label(DIST_bins = "Air Yards",
+             AvgVelo = "Ball Speed (MPH)",
+             AvgSE = "Spiral Efficiency (%)",
+             AvgSpin = "Spin Rate (RPM)",
+             AvgRLT = "Release Time (sec)"
+             ) %>%
+  cols_align(columns = everything(), align = "center") %>%
+  opt_align_table_header(align = "center")
+
+# gtsave(avgs_table, filename = "avgs_table.png")
+```
+
+```{r Sprial Efficiency by QB}
+# se_byqb <- 
+wilson %>% 
+  ggplot(aes(x = SE_bins, fill = QB)) +
+  geom_bar(position = "dodge") +
+  scale_fill_manual(values = c("#890519", "#a7a5af", "#d1b179", "#333333", "#eadbc1", "#e0dfe3")) +
+  labs(x = "Sprial Efficiency",
+       y = "Total Throws",
+       title = "Spiral Efficiency by QB") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, vjust = 2),
+        legend.position = "right",
+        axis.text.x = element_text(vjust = 2))
+
+# ggsave(filename = "se_byqb.png", plot = se_byqb)
+```
+
+```{r Throw Speed vs Distance by QB}
+wilson %>% 
+  ggplot(aes(x = VEL, y = DIST)) +
+  geom_density_2d() +
+  geom_density_2d_filled(alpha = 0.5) +
+  geom_point(color = "white", alpha = 0.2) +
+  labs(x = "Ball Speed (MPH)",
+       y = "Throw Distance (yds)",
+       title = "Throw Speed vs. Distance by QB") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, vjust = 2)) +
+  facet_wrap(~QB)
+```
+
+```{r Spiral vs Spin}
+# sevsspin <- 
+wilson %>% 
+  ggplot(aes(x = DIST, y = SPIN, color = QB, group = 1)) +
+  geom_jitter(size = 2.5) +
+  geom_smooth(method = "loess", color = "red2", alpha = 0.01) +
+  scale_color_manual(values = c("#890519", "#a7a5af", "#d1b179", "#333333", "#eadbc1", "#e0dfe3")) +
+  ggtitle(label = "Throw Distance vs. Spin Rate") +
+  ggthemes::theme_excel_new() +
+  theme(plot.title = element_text(color = "black"))
+
+# ggsave(filename = "sevsspin.png", plot = sevsspin)
+```
+
+```{r Correlation Loops}
+loopdata <- data.frame(wilson %>% select(-UTC, -QB, -headshot, -DIST_bins, -SE_bins))
+
+for (i in 1:ncol(loopdata)) {
+  print(paste0("Correlation between Snap-to-Release Time and ", colnames(loopdata)[i], " is ", round(cor(loopdata$STR, loopdata[, i]), 3)))
+}
+
+for (i in 1:ncol(loopdata)) {
+  print(paste0("Correlation between Snap-to-Target Time and ", colnames(loopdata)[i], " is ", round(cor(loopdata$STT, loopdata[, i]), 3)))
+}
+
+for (i in 1:ncol(loopdata)) {
+  print(paste0("Correlation between Release Time and ", colnames(loopdata)[i], " is ", round(cor(loopdata$RLT, loopdata[, i]), 3)))
+}
+
+for (i in 1:ncol(loopdata)) {
+  print(paste0("Correlation between Velocity and ", colnames(loopdata)[i], " is ", round(cor(loopdata$VEL, loopdata[, i]), 3)))
+}
+
+for (i in 1:ncol(loopdata)) {
+  print(paste0("Correlation between Spin Rate and ", colnames(loopdata)[i], " is ", round(cor(loopdata$SPIN, loopdata[, i]), 3)))
+}
+
+for (i in 1:ncol(loopdata)) {
+  print(paste0("Correlation between Spiral Efficiency and ", colnames(loopdata)[i], " is ", round(cor(loopdata$SE, loopdata[, i]), 3)))
+}
+
+for (i in 1:ncol(loopdata)) {
+  print(paste0("Correlation between Time of Flight and ", colnames(loopdata)[i], " is ", round(cor(loopdata$TOF, loopdata[, i]), 3)))
+}
+
+for (i in 1:ncol(loopdata)) {
+  print(paste0("Correlation between Throw Distance and ", colnames(loopdata)[i], " is ", round(cor(loopdata$DIST, loopdata[, i]), 3)))
+}
+```
